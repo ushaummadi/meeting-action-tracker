@@ -214,11 +214,6 @@ elif page == "Items":
                         key=f"due_{item['id']}"
                     )
                     done = col4.checkbox("Done", value=bool(item["done"]), key=f"done_{item['id']}")
-
-                    if done != bool(item["done"]):
-                        update_action_item(item["id"], ts_id, task, owner, str(due_date), done)
-                        st.rerun()
-
                     b1, b2 = st.columns(2)
 
                     if b1.button("Save", key=f"save_{item['id']}"):
