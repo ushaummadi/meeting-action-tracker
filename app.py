@@ -164,7 +164,7 @@ elif page == "Items":
 
     if not st.session_state.current_ts_id:
         
-        st.info("Process a transcript first.")
+        st.info("No transcript selected.Go to History and click Open.")
     else:
         ts_id = st.session_state.current_ts_id
         items = sorted(get_action_items(ts_id), key=lambda x: x["done"])
