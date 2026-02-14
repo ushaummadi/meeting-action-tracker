@@ -11,9 +11,20 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
-def extract_action_items(transcript):
-    """Extract structured action items using Groq with smart fallback"""
+def extract_action_items(transcript: str):
+    """
+    Extract structured action items using Groq.
+    Falls back to rule-based extraction if LLM fails.
+    Always returns a list of dicts:
+    [
+        {"task": "...", "owner": "...", "due_date": "..."}
+    ]
+    """
 
+    if not transcript.strip():
+        return []
+
+    # If no API key → fallback immediately
     if not GROQ_API_KEY:
         return smart_fallback(transcript)
 
@@ -23,29 +34,17 @@ def extract_action_items(transcript):
     }
 
     prompt = f"""
-You are an AI assistant that extracts structured action items.
+You are an AI system that extracts structured action items.
 
-Rules:
-1. Every sentence that implies a task must become an action item.
-2. If format is "Name: sentence", then:
+STRICT RULES:
+1. Every task sentence becomes one action item.
+2. If format is "Name: sentence":
    - owner = Name
    - task = sentence (without name)
-3. Extract ALL possible action items. Do NOT skip any.
-4. If no due date mentioned, keep due_date as empty string "".
-5. Return STRICT JSON list only.
-
-Example:
-Transcript:
-Alex: We need to finalize the report.
-Priya: I will prepare the draft.
-John: I'll review it before submission.
-
-Output:
-[
-  {{"task":"We need to finalize the report.","owner":"Alex","due_date":""}},
-  {{"task":"I will prepare the draft.","owner":"Priya","due_date":""}},
-  {{"task":"I'll review it before submission.","owner":"John","due_date":""}}
-]
+3. Extract ALL tasks.
+4. If no due date mentioned → due_date = "".
+5. Return ONLY a valid JSON list.
+6. No explanations. No markdown. No extra text.
 
 Transcript:
 {transcript}
@@ -64,24 +63,25 @@ Transcript:
 
         result = response.json()["choices"][0]["message"]["content"]
 
-        # Extract JSON safely
+        # Safely extract JSON list
         json_match = re.search(r'\[[\s\S]*?\]', result)
         if json_match:
-            items = json.loads(json_match.group())
+            parsed_items = json.loads(json_match.group())
 
             cleaned = []
-            for item in items:
+
+            for item in parsed_items:
                 task = item.get("task", "").strip()
                 owner = item.get("owner", "").strip()
                 due_date = item.get("due_date", "").strip()
 
-                # Basic date normalization attempt
+                # Normalize date format if valid
                 if due_date:
                     try:
-                        parsed = datetime.strptime(due_date, "%Y-%m-%d")
-                        due_date = parsed.strftime("%Y-%m-%d")
+                        parsed_date = datetime.strptime(due_date, "%Y-%m-%d")
+                        due_date = parsed_date.strftime("%Y-%m-%d")
                     except:
-                        pass
+                        due_date = ""
 
                 if task:
                     cleaned.append({
@@ -93,21 +93,21 @@ Transcript:
             if cleaned:
                 return cleaned
 
-    except Exception:
-        pass
+    except Exception as e:
+        print("LLM extraction failed:", e)
 
-    # Fallback if LLM fails
+    # If anything fails → fallback
     return smart_fallback(transcript)
 
 
-# -----------------------------
-# SMART FALLBACK
-# -----------------------------
+# ---------------------------------------------------
+# SMART FALLBACK (RULE-BASED EXTRACTION)
+# ---------------------------------------------------
 
-def smart_fallback(transcript):
+def smart_fallback(transcript: str):
     """
-    Extract basic action items using rule-based logic.
-    Detects 'Name: sentence' format.
+    Basic rule-based extraction:
+    Detects 'Name: sentence'
     """
 
     items = []
@@ -117,18 +117,21 @@ def smart_fallback(transcript):
         if not line:
             continue
 
-        # Detect Name: pattern
+        # Detect Name: sentence
         match = re.match(r"^(.*?):\s*(.*)", line)
         if match:
             owner = match.group(1).strip()
             sentence = match.group(2).strip()
 
-            # Only capture actionable lines
-            if any(word in sentence.lower() for word in ["will", "prepare", "review", "send", "complete", "submit"]):
+            # Basic action detection
+            if any(word in sentence.lower() for word in [
+                "will", "prepare", "review", "send",
+                "complete", "submit", "finalize"
+            ]):
                 items.append({
                     "task": sentence,
                     "owner": owner,
                     "due_date": ""
                 })
 
-    return items[:5]
+    return items[:10]
