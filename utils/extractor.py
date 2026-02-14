@@ -26,19 +26,25 @@ def extract_action_items(transcript):
 You are an AI assistant that extracts structured action items.
 
 Rules:
-- Extract only actionable tasks.
-- If transcript format is "Name: sentence", use Name as owner.
-- If no due date mentioned, return empty string.
-- Return STRICT JSON only.
-- No explanation. No markdown.
+1. Every sentence that implies a task must become an action item.
+2. If format is "Name: sentence", then:
+   - owner = Name
+   - task = sentence (without name)
+3. Extract ALL possible action items. Do NOT skip any.
+4. If no due date mentioned, keep due_date as empty string "".
+5. Return STRICT JSON list only.
 
-Format:
+Example:
+Transcript:
+Alex: We need to finalize the report.
+Priya: I will prepare the draft.
+John: I'll review it before submission.
+
+Output:
 [
-  {{
-    "task": "short actionable task",
-    "owner": "person responsible",
-    "due_date": "YYYY-MM-DD or empty"
-  }}
+  {{"task":"We need to finalize the report.","owner":"Alex","due_date":""}},
+  {{"task":"I will prepare the draft.","owner":"Priya","due_date":""}},
+  {{"task":"I'll review it before submission.","owner":"John","due_date":""}}
 ]
 
 Transcript:
@@ -59,7 +65,7 @@ Transcript:
         result = response.json()["choices"][0]["message"]["content"]
 
         # Extract JSON safely
-        json_match = re.search(r"\[.*\]", result, re.DOTALL)
+        json_match = re.search(r'\[[\s\S]*?\]', result)
         if json_match:
             items = json.loads(json_match.group())
 
